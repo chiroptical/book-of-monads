@@ -1,6 +1,6 @@
 module Lib where
 
-import Prelude hiding (Eq(..))
+import           Prelude hiding (Eq (..))
 
 class Eq a where
   (==) :: a -> a -> Bool
@@ -27,7 +27,10 @@ instance Container [] where
   empty = []
   insert = (:)
 
-newtype Queue a = Queue { unQueue :: [a] }
+newtype Queue a =
+  Queue
+    { unQueue :: [a]
+    }
 
 instance Container Queue where
   empty = Queue []

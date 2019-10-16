@@ -3,6 +3,9 @@ module Lib where
 import           State
 import Control.Monad.Trans.Reader
 import Data.Functor.Identity
+import Writer
+
+import Data.Functor.Contravariant
 
 -- This is a bad idea!
 -- modify internal state similar to accessing
@@ -63,3 +66,23 @@ nextValue = State $ \i -> (i, i + 1)
 -- 11. Apply lambda
 -- lib :: (Int, Int)
 -- lib = (0, 0)
+
+-- Section 6.5
+mapWriter :: (v -> w) -> Writer v a -> Writer w a
+mapWriter f (Writer (v, a)) = Writer (f v, a)
+
+class Bifunctor f where
+  first :: (v -> w) -> f v a -> f w a
+  second :: (a -> b) -> f v a -> f v b
+  bimap :: (v -> w) -> (a -> b) -> f v a -> f w b
+
+withReader :: (r -> s) -> Reader s a -> Reader r a
+withReader = undefined
+
+-- Exercise 6.3, consider the following type, implement Contravariant
+
+newtype Return r a = Return (a -> r)
+
+instance Contravariant (Return r) where
+  -- contramap :: (a -> b) -> f b -> f a
+  contramap f (Return ra) = Return $ ra . f

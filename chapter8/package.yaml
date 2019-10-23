@@ -1,0 +1,37 @@
+library:
+  source-dirs: src
+tests:
+  chapter8-test:
+    source-dirs: test
+    main: Spec.hs
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    dependencies:
+    - chapter8
+copyright: 2019 Author name here
+maintainer: example@example.com
+dependencies:
+- stm
+- base >= 4.7 && < 5
+- vector
+name: chapter8
+version: 0.1.0.0
+extra-source-files:
+- README.md
+- ChangeLog.md
+author: Author name here
+github: githubuser/chapter8
+license: BSD3
+executables:
+  chapter8-exe:
+    source-dirs: app
+    main: Main.hs
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    dependencies:
+    - chapter8
+description: Please see the README on GitHub at <https://github.com/githubuser/chapter8#readme>

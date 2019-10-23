@@ -1,8 +1,14 @@
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE FunctionalDependencies #-}
+{-# LANGUAGE LambdaCase #-}
+
 module Lib where
 
 import           Control.Applicative
 import           Control.Monad
-import Control.Monad.Logic
+import           Control.Monad.Logic
 
 -- (<|>) :: Maybe a -> Maybe a -> Maybe a
 -- Just x  <|> _     = Just x
@@ -137,20 +143,68 @@ list = asum . map return
 --       guard (x + y == z) >> return (x, y, z)
 
 fairTriples :: [Integer] -> Logic (Integer, Integer, Integer)
-fairTriples ns = 
-  list ns >>- \x ->
-  list ns >>- \y ->
-  list ns >>- \z ->
-      return (x, y, z)
+fairTriples ns =
+  list ns >>- \x -> list ns >>- \y -> list ns >>- \z -> return (x, y, z)
 
 sums' :: [Integer] -> Logic (Integer, Integer, Integer)
 sums' ns =
-  fairTriples ns >>= \(x, y, z) ->
-    guard (x + y == z) >> return (x, y, z)
+  fairTriples ns >>= \(x, y, z) -> guard (x + y == z) >> return (x, y, z)
 
 pyts' :: [Integer] -> Logic (Integer, Integer, Integer)
-pyts' ns =
-  fairTriples ns >>= \(x, y, z) ->
-    guard (x ^ 3 + y ^ 3 == z ^ 3) >> return (x, y, z)
+pyts' ns = fairTriples ns
+  >>= \(x, y, z) -> guard (x ^ 3 + y ^ 3 == z ^ 3) >> return (x, y, z)
 
 triples' = liftA2 (<|>) sums' pyts'
+
+-- Comprehensions and guards
+
+prime = undefined
+
+xs ns = [ (x, y) | x <- ns, y <- ns, prime $ x + y ]
+
+-- The above is literally translated to:
+ys ns = concatMap
+  (\x -> concatMap (\y -> if prime (x + y) then [(x, y)] else []) ns)
+  ns
+
+-- Or, for a generic Monad
+zs ns = ns >>= \x -> ns >>= \y -> if prime (x + y) then pure (x, y) else mzero
+
+-- Notice `guard`?
+as ns = ns >>= \x -> ns >>= \y -> guard (prime (x + y)) >> pure (x, y)
+
+-- 7.3 Catching Errors
+--
+-- unit - ()
+--
+class Monad m => MonadError e m | m -> e where
+  throwError :: e -> m a
+  catchError :: m a -> (e -> m a) -> m a
+
+data NameReason = NameTooLong | UnknownCharacters
+
+vn :: MonadError NameReason m => String -> m Bool
+vn name =
+  validateName name
+    `catchError` (\case
+                   NameTooLong       -> vn (cutName name)
+                   UnknownCharacters -> vn (normalize name)
+                 )
+
+-- Exercise 7.5 - Implement MonadError for Maybe and Either
+
+instance MonadError () Maybe where
+  throwError _ = Nothing
+  -- f :: () -> m a
+  catchError Nothing f = f ()
+  catchError ma _ = ma
+                   
+instance MonadError a (Either a) where
+  throwError e = Left e
+  catchError (Left e) f = f e
+  catchError ma _ = ma
+
+-- return :: a -> Either e a  | throwError :: e -> Either e a
+-- (>>=) :: Either e a        | catchError :: Either e a
+--       -> (a -> Either e b) |            -> (e -> Either f a)
+--       -> Either e b        |            -> Either f a

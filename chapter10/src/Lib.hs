@@ -5,6 +5,7 @@
 module Lib where
 
 import           Control.Applicative
+import           Control.Monad                  ( join )
 
 newtype (f :.: g) a =
   Compose (f (g a))
@@ -54,10 +55,38 @@ newtype Reader r a =
     }
 
 -- Exercise 10.1
+-- The complement to both of these functions are not possible to implement
+-- because `(>>=)` works by flattening an `m (m a)` However, we need `(>>=)` to
+-- create a result with `Reader,Writer` as the outer monad (which isn't
+-- possible).
 swapWriter :: Monad m => (Writer w :.: m) a -> (m :.: Writer w) a
 swapWriter (Compose c) = Compose $
   let (ma, w) = runWriter c
    in ma >>= \a -> pure $ Writer (a, w)
 
 swapReader :: Monad m => (m :.: Reader r) a -> (Reader r :.: m) a 
-swapReader (Compose c) = Compose $ _a
+swapReader (Compose c) = Compose . Reader $
+  \r ->
+    c >>= \rra ->
+      pure $ runReader rra r
+
+newtype Listed m a =
+  Listed
+    { unListed :: [m a]
+    } deriving Show
+
+-- Exercise 10.2 - Write Functor and Applicative
+-- for `Listed`
+instance Functor m => Functor (Listed m) where
+  fmap f (Listed xs) = Listed $ (fmap . fmap) f xs
+
+instance Applicative m => Applicative (Listed m) where
+  pure a = Listed [pure a]
+  --Listed fab <*> Listed xs = Listed $ [mf <*> x | mf <- fab, x <- xs]
+  Listed fab <*> Listed xs = Listed $ (<*>) <$> fab <*> xs
+
+instance (Traversable m, Monad m) => Monad (Listed m) where
+  Listed xs >>= f = Listed $ do
+    x <- xs
+    y <- mapM (unListed . f) x
+    pure $ join y

@@ -26,6 +26,7 @@ dependencies:
 - unliftio-core
 - monad-unlift
 - monad-control
+- mmorph
 
 library:
   source-dirs: src

@@ -10,13 +10,17 @@ module Lib where
 
 import           Control.Monad.Trans.Reader
 import           Control.Monad.Trans.Class
+import           Control.Monad.Trans.State
 import           Control.Monad.Base
 import           Control.Monad.ST
 import           Control.Monad
 import           Control.Monad.IO.Unlift
 import           Control.Monad.Trans.Unlift
 import           Control.Monad.Trans.Control    ( control )
+import           Control.Monad.Morph            ( hoist )
+import           Control.Exception       ( bracket )
 import           System.IO
+import Data.Functor.Identity
 
 -- Consider the monad transformer MnT, with instances
 -- instance Monad m => Monad (MnT m) where
@@ -97,10 +101,66 @@ instance (Applicative (t m), Monad (t m), MonadBase b m, MonadTrans t) =>
 withFile' :: MonadUnliftIO m => FilePath -> IOMode -> (Handle -> m r) -> m r
 withFile' fp im act = withRunInIO $ \run -> withFile fp im (run . act)
 
-withFile'' :: MonadBaseUnlift IO m => FilePath -> IOMode -> (Handle -> m r) -> m r
+withFile''
+  :: MonadBaseUnlift IO m => FilePath -> IOMode -> (Handle -> m r) -> m r
 withFile'' fp im act = do
   UnliftBase run <- askUnliftBase
   liftBase $ withFile fp im (run . act)
 
-withFile''' :: MonadBaseControl IO m => FilePath -> IOMode -> (Handle -> m r) -> m r
+withFile'''
+  :: MonadBaseControl IO m => FilePath -> IOMode -> (Handle -> m r) -> m r
 withFile''' fp im act = control $ \run -> withFile fp im (run . act)
+
+bracket' :: MonadBaseControl IO m => m r -> (r -> m b) -> (r -> m a) -> m a
+bracket' acq release use =
+  control $ \run ->
+    bracket (run acq)
+      (\r -> run (restoreM r >>= release))
+      (\r -> run (restoreM r >>= use))
+
+foo :: StateT [String] IO ()
+foo = bracket' (modify (++ ["1"])) -- acquire
+               (\_ -> modify (++ ["3"])) -- release
+               (\_ -> modify (++ ["2"])) -- use
+
+generalize :: Monad m => Identity a -> m a
+generalize (Identity x) = return x
+
+g1 :: Reader String Int -- ReaderT String Identity Int
+g2 :: Int -> ReaderT String Maybe Bool
+g1 = undefined
+g2 = undefined
+
+-- hoist :: Monad m => (forall a. m a -> n a) -> t m b -> t n b
+
+bar :: ReaderT String Maybe Bool
+bar = do
+  x <- hoist generalize g1
+  g2 x
+
+h1 :: StateT String Maybe Bool
+h2 :: StateT String (ReaderT Int Maybe) Bool
+h1 = undefined
+h2 = undefined
+
+-- Specialize `hoist`
+-- hoist :: (forall a. m a -> n a) -> StateT String m b -> StateT String n b
+
+baz :: StateT String (ReaderT Int Maybe) Bool
+baz = hoist lift h1
+
+-- squash :: Monad m => t (t m) a -> t m a
+
+-- Not every `lift` is fine to use, it must obey the
+-- monad morphism laws
+--
+-- lift . return === return
+-- lift . (f <=< g) === lift f <=< lift . g
+--
+-- `hoist f` is only a monad morphism when `f` is
+-- a monad morphism as well
+--
+-- MonadUnliftIO's `run` must obey the above law
+-- and an additional law
+--
+-- withRunInIO (\run -> liftIO $ run m) === m

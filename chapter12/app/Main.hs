@@ -1,6 +1,9 @@
 module Main where
 
-import Lib
+import           Control.Monad.Trans.State      ( execStateT )
+import           Lib
 
 main :: IO ()
-main = putStrLn "Chapter 12"
+main = do
+  res <- execStateT foo []
+  print res

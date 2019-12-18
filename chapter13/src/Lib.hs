@@ -1,3 +1,4 @@
+{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE FlexibleContexts #-}
@@ -5,43 +6,33 @@
 module Lib where
 
 import           System.Random                  ( randomRIO )
-import           Control.Monad                  ( void )
+import           Control.Monad                  ( void
+                                                , (>=>)
+                                                )
 import           Control.Exception              ( catch )
 import           Data.Map                       ( Map )
 import qualified Data.Map                      as Map
 import           Control.Monad.Trans.State
 import           Control.Monad.Trans.Class      ( lift )
+import qualified System.IO                     as SIO
 
-class FS m where
-  writeFile :: FilePath -> String -> m (Either IOError ())
-  readFile :: FilePath -> m (Either IOError String)
+-- 13.3.2 Streams as Initial Style Monads
 
--- Cannot mix FS and IO actions freely
--- need to specialize m ~ IO for this
--- to work
---
--- f :: (Monad m, FS m) => FilePath -> m ()
--- f path = do
---   num <- randomRIO (1 :: Integer, 100)
---   void $ Lib.writeFile path (show num)
+-- Core `pipes` type
 
-instance FS IO where
-  writeFile path contents =
-    (Right <$> Prelude.writeFile path contents) `catch` \ex -> return $ Left ex
-  readFile path =
-    (Right <$> Prelude.readFile path) `catch` \ex -> return $ Left ex
+data Proxy a' a b' b m r
+  = Request a' (a  -> Proxy a' a b' b m r)
+  | Respond b  (b' -> Proxy a' a b' b m r)
+  | M          (m    (Proxy a' a b' b m r))
+  | Pure       r
 
-newtype MockFileSystem =
-  MockFileSystem
-    { getMockFileSystem :: Map FilePath String
-    }
+-- Core `conduit` type
 
-instance FS (State MockFileSystem) where
-  writeFile path contents =
-    Right <$> modify (MockFileSystem . Map.insert path contents . getMockFileSystem)
+data Pipe l i o u m r
+  = HaveOutput (Pipe l i o u m r)
+  | NeedInput (i -> Pipe l i o u m r) (u -> Pipe l i o u m r)
+  | Done r
+  | PipeM (m (Pipe l i o u m r))
+  | LeftOver (Pipe l i o u m r) l
 
-  readFile path = do
-    mfs <- getMockFileSystem <$> get
-    pure $ case Map.lookup path mfs of 
-      Nothing -> Left . userError $ "Path `" ++ path ++ "` does not exist!"
-      Just contents -> Right contents
+-- Section 13.4 Operational Style and Freer Monads

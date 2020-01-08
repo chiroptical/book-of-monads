@@ -113,7 +113,7 @@ takeIfNotTaken p = do
   i <- info p
   case i of
     Just _  -> return Nothing
-    Nothing -> Just <$> Lib.take p
+    Nothing -> Just <$> FinalInitialFreeExamples.take p
 
 -- Most common interpretations take the form
 -- i.e. Natural transformations

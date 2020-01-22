@@ -1,7 +1,6 @@
-{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE GADTs #-}
 
-module Lib where
+module Freer where
 
 import qualified Data.Map                      as Map
 import           Data.Map                       ( Map )

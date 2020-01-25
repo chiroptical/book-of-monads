@@ -75,8 +75,8 @@ instance Functor (Freer instr) where
 instance Applicative (Freer instr) where
   pure = Pure'
   Pure' f    <*> Pure' x    = Pure' $ f x
-  f          <*> Impure x k = Impure x (\a -> f <*> k a)
   Impure x k <*> f          = Impure x (\a -> k a <*> f)
+  Pure' f <*> Impure x k    = Impure x (fmap f . k)
 
 instance Monad (Freer instr) where
   Pure' x    >>= f = f x

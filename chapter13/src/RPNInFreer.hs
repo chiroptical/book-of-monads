@@ -45,7 +45,7 @@ evaluate []               = pop
 evaluate ((Number n) : r) = push n >> evaluate r
 evaluate (Plus       : r) = (+) <$> pop <*> pop >>= push >> evaluate r
 evaluate (Times      : r) = (*) <$> pop <*> pop >>= push >> evaluate r
-evaluate (Subtract   : r) = (-) <$> pop <*> pop >>= push >> evaluate r
+evaluate (Subtract   : r) = flip (-) <$> pop <*> pop >>= push >> evaluate r
 
 rpn :: [RPNInstruction] -> Either String Integer
 rpn instructions = case runStateT (interpret $ evaluate instructions) [] of
@@ -63,8 +63,8 @@ instance Functor (Freer instr) where
 instance Applicative (Freer instr) where
   pure = Pure
   Pure f     <*> Pure x     = Pure $ f x
-  f          <*> Impure x k = Impure x (\a -> f <*> k a)
   Impure x k <*> f          = Impure x (\a -> k a <*> f)
+  Pure f     <*> Impure x k = Impure x (fmap f . k)
 
 instance Monad (Freer instr) where
   Pure x     >>= f = f x

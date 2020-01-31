@@ -9,8 +9,10 @@
 module ExtensibleEffects where
 
 import System.IO (readFile, writeFile)
+import System.Random (randomRIO)
 
 import Freer
+import           Control.Exception              ( try )
 
 -- Section 14.3
 
@@ -108,9 +110,16 @@ runFS = loop
     loop :: Member (Lift IO) rs => Eff (FS : rs) a -> Eff rs a
     loop (Pure x) = return x
     loop (Impure a k) = case proj a of
-                          Right (ReadFile fp) -> loop . k $ _a
-                          Right (WriteFile fp contents) -> _b
+                          Right (ReadFile fp) -> Impure (inj . Lift . try $ System.IO.readFile fp) (loop . k)
+                          Right (WriteFile fp contents) -> Impure (inj . Lift . try $ System.IO.writeFile fp contents) (loop . k)
                           Left op -> Impure op (loop . k)
+
+runRandomGen :: Member (Lift IO) rs => Eff (RandomGen : rs) a -> Eff rs a
+runRandomGen (Pure x) = return x
+runRandomGen (Impure a k) =
+  case proj a of
+    Right (Random start end) -> Impure (inj . Lift $ randomRIO (start, end)) (runRandomGen . k)
+    Left op -> Impure op (runRandomGen . k)
 
 runM :: Monad m => Eff (Lift m : '[]) a -> m a
 runM = loop

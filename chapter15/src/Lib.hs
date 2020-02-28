@@ -1,137 +1,75 @@
+{-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE TypeApplications #-}
-{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE DeriveFunctor #-}
 
 module Lib where
 
-(+++) :: [a] -> [a] -> [a]
-[]       +++ ys = ys
-(x : xs) +++ ys = x : xs +++ ys
+import Free
 
-rev :: [a] -> [a]
-rev []       = []
-rev (x : xs) = rev xs ++ [x]
+data Tree a = Leaf a | Node (Tree a) (Tree a)
+  deriving (Functor, Show)
 
-rev' :: [a] -> [a]
-rev' = go []
- where
-  go acc []       = acc
-  go acc (x : xs) = go (x : acc) xs
+-- Exercise 15.2 Tree can be written as a free monad. What is the pattern Functor? To which constructor in Free does Leaf correspond?
 
-revF :: [a] -> [a]
-revF = foldl (flip (:)) []
+-- Leaf corresponds to the `Pure` constructor
 
--- 15.1.1 Difference Lists
+type TreeF = Free Tree
 
-newtype DList a = DList ([a] -> [a])
+instance Applicative Tree where
+  pure = Leaf 
+  Leaf f <*> t = fmap f t
+  Node l r <*> t = Node (l <*> t) (r <*> t)
 
-toList :: DList a -> [a]
-toList (DList dl) = dl []
+instance Monad Tree where
+  Leaf x >>= f = f x
+  Node l r >>= f = Node (l >>= f) (r >>= f)
 
-empty :: DList a
-empty = DList id
+fullTree :: Integer -> Tree Integer
+fullTree 0 = Leaf 0
+fullTree n = do
+  fullTree (n - 1)
+  Node (Leaf n) (Leaf n)
 
-fromList :: [a] -> DList a
-fromList = DList . flip (++)
+-- 15.2.1 Codensity
 
-instance Semigroup (DList a) where
-  DList xs <> DList ys = DList (xs . ys)
+newtype Codensity m a =
+  Codensity
+    { runCodensity :: forall b. (a -> m b) -> m b
+    }
 
-instance Monoid (DList a) where
-  mempty = empty
+instance Functor (Codensity k) where
+  fmap f (Codensity m) = Codensity $ \k -> m (k . f)
 
-revInDList :: [a] -> [a]
-revInDList = toList . rev'
- where
-  rev' []       = mempty
-  rev' (x : xs) = rev' xs <> fromList [x]
+instance Applicative (Codensity k) where
+  pure x = Codensity $ \k -> k x
+  Codensity f <*> Codensity x = Codensity $ \bfr -> f (\ab -> x (bfr . ab))
 
--- 15.1.2 Church and Scott Encodings
+instance Monad (Codensity k) where
+  Codensity x >>= f = Codensity $ \k -> x (\y -> runCodensity (f y) k)
 
-foldr_ :: (a -> b -> b) -> b -> [a] -> b
-foldr_ _ acc [] = acc
-foldr_ f v (x : xs) = f x (foldr_ f v xs)
+lower :: Monad m => Codensity m a -> m a
+lower (Codensity k) = k pure
 
--- Intuition for foldr is constructor substitution
--- Cons 1 (Cons 2 (Cons 3 Nil))
--- foldr f n [1, 2, 3]
--- Replace Cons with `f` and Nil with `n`
--- i.e.
--- f 1 (f 2 (f 3 n)) 
+lift :: Monad m => m a -> Codensity m a
+lift m = Codensity (m >>=)
 
-sum_ :: [Integer] -> Integer
-sum_ = foldr_ (+) 0
+class MonadFree f m | m -> f where
+  wrap :: f (m a) -> m a
 
-concat_ :: [a] -> [a] -> [a]
-concat_ = foldr_ (:)
+instance Functor f => MonadFree f (Free f) where
+  wrap = Free
 
-newtype EList a = EList (forall b. (a -> b -> b) -> b -> b)
+instance (Functor f, MonadFree f m) => MonadFree f (Codensity m) where
+  wrap t = Codensity $ \h -> wrap (fmap (`runCodensity` h) t)
 
-toEList :: [a] -> EList a
-toEList xs = EList (\f v -> foldr f v xs)
+improve :: Functor f => (forall m. MonadFree f m => m a) -> Free f a
+improve = lower
 
-fromEList :: EList a -> [a]
-fromEList (EList fold) = fold (:) []
+liftF :: (Functor f, Monad m, MonadFree f m) => f a -> m a
+liftF = wrap . fmap pure
 
-nil :: EList a
-nil = EList (\_ v -> v)
-
-cons :: a -> EList a -> EList a
-cons x (EList fold) = EList (\f v -> f x (fold f v))
-
--- null :: 
-null (EList fold) = fold (\_ _ -> False) True
-
-head (EList fold) = fold const (error "empty list")
-
-tail (EList fold) = EList (\f v -> fold (\h t g -> g h (t f))
-                                        (\_ -> v) (\_ v' -> v'))
-
-matchList :: (a -> [a] -> b) -> b -> [a] -> b
-matchList cons nil [] = nil
-matchList cons nil (x : xs) = cons x xs
-
-matchListWithCons :: a -> (a -> [a] -> b) -> b -> [a] -> b
-matchListWithCons _ _ n [] = n
-matchListWithCons x f _ ys = f x ys
-
-data SList a = SList (forall b. (a -> [a] -> b) -> b -> b)
-
--- Exercise 15.1: Define `nil,cons,null,head,tail` for Scott encoded lists
-
-nilS :: SList a
-nilS = SList (\_ v -> v)
-
-sFromList :: [a] -> SList a
-sFromList [] = nilS
-sFromList (x : xs) = SList $ \cons _ -> cons x xs
-
-sToList :: forall a. SList a -> [a]
-sToList (SList slist) = slist (:) []
-
-nullS :: SList a -> Bool
-nullS (SList slist) = slist @Bool cons True
-  where
-    cons :: a -> [a] -> Bool
-    cons _ _ = False
-
-headS :: forall a. SList a -> Maybe a
-headS (SList slist) = slist @(Maybe a) cons Nothing
-  where
-    cons :: a -> [a] -> Maybe a
-    cons x _ = Just x
-
--- tailS :: forall a. SList a -> SList a
--- tailS (SList slist) = SList $ \cons nil -> slist (inCons cons nil) (error "Can't tail an nilS")
---   where
---     inCons cons nil _ [] = nil
---     inCons cons nil _ (x : xs) = cons x xs
-
-tailS :: forall a. SList a -> Maybe (SList a)
-tailS (SList slist) = slist (\_ xs -> Just (sFromList xs)) Nothing
-
-consS :: forall a. a -> SList a -> SList a
-consS x (SList slist) = SList $ \cons nil -> slist (consCons cons) (cons x [])
-  where
-    consCons cons y [] = cons x [y]
-    consCons cons y ys = cons x (y : ys)
+-- Section 15.2.2 is where we stopped. This is well over my head and I need to
+-- sit down with a pen and paper and try to fully comprehend what is going on

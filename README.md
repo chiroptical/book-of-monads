@@ -11,8 +11,8 @@ receive no financial incentive for your purchase.
 
 ## Notes
 
-I stopped at section 15.2.2 due to difficulty. I still don't fully comprehend
-Free and Freer Monads (theoretically) and that is impeding my ability to
-continue. Looking at Church encoded version of Free Monads was beyond my
-abilities. Not entirely sure how to pick this back up and really finish the
-last bits of the book.
+I stopped at section 15.2.2 due to difficulty. My mental model for Free and
+Freer monads is essentially non-existent and thinking about the performance of
+Free and Freer monads is useless without it. Looking at Church encoded version
+of Free Monads was beyond my abilities. Not entirely sure how to pick this back
+up and really finish the final sections of the book. 

@@ -1,6 +1,8 @@
 Book of Monads
 ---
 
+[![Chiroptical](https://img.shields.io/badge/twitch.tv-chiroptical-purple?logo=twitch&style=for-the-badge)](https://twitch.tv/chiroptical)
+
 Here lay a bunch of stack projects while I was working on the "Book of Monads"
 by Alejandro Serrano Mena. This code was written on my stream at
 https://twitch.tv/chiroptical
